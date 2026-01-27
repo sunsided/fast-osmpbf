@@ -190,9 +190,9 @@ dependencies = [
 
 [[package]]
 name = "fast-osmpbf"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54d2511491929a88e58ec88a75af1c6792e273afb1907f6ea1eb73ffd8453081"
+checksum = "4ffd5a33e663c7eb260d7ff84d17fa8ae25e092d8673e6be814a108cc4873654"
 dependencies = [
  "crossbeam-channel",
  "flate2",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "fast-osmpbf-js"
-version = "0.1.0"
+version = "0.2.3"
 dependencies = [
  "fast-osmpbf",
  "napi",

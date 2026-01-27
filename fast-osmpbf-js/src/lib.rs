@@ -27,11 +27,7 @@ impl OsmReader {
         Self { path }
     }
     #[napi]
-    pub fn stream_blocks(
-        &self,
-        element_filter: Option<JsElementFilter>,
-        tag_filter: Option<Vec<String>>,
-    ) -> AsyncBlockIterator {
+    pub fn stream_blocks(&self, element_filter: Option<JsElementFilter>, tag_filter: Option<Vec<String>>) -> AsyncBlockIterator {
         let (tx, rx) = tokio::sync::mpsc::channel::<JsElementBlock>(MAX_BLOCK_THROUGHPUT);
 
         let path = self.path.clone();
@@ -39,19 +35,15 @@ impl OsmReader {
             let reader = fast_osmpbf::OsmReader::from_path(&path).expect("Failed to open file");
             if let Some(filter) = tag_filter {
                 reader
-                    .apply_tag_filter(
-                        &(filter.iter().map(|tag| tag.as_str()).collect::<Vec<&str>>()),
-                    )
+                    .apply_tag_filter(&(filter.iter().map(|tag| tag.as_str()).collect::<Vec<&str>>()))
                     .expect("Invalid tag filter");
             }
             if let Some(filter) = element_filter {
-                reader
-                    .apply_element_filter(ElementFilter {
-                        nodes: filter.nodes,
-                        ways: filter.ways,
-                        relations: filter.relations,
-                    })
-                    .expect("Invalid tag filter");
+                reader.apply_element_filter(ElementFilter {
+                    nodes: filter.nodes,
+                    ways: filter.ways,
+                    relations: filter.relations,
+                });
             }
 
             reader.par_blocks().for_each(|block| {
@@ -62,9 +54,7 @@ impl OsmReader {
             })
         });
 
-        AsyncBlockIterator {
-            rx: Arc::new(Mutex::new(rx)),
-        }
+        AsyncBlockIterator { rx: Arc::new(Mutex::new(rx)) }
     }
 }
 

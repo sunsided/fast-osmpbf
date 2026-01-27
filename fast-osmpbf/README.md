@@ -1,12 +1,11 @@
-fast-osmpbf
-======
-A high-performance Rust library for reading OpenStreetMap files ([*.osm.pbf](https://wiki.openstreetmap.org/wiki/PBF_Format)).
+# fast-osmpbf
+
+A high-performance Rust library for reading OpenStreetMap files ([\*.osm.pbf](https://wiki.openstreetmap.org/wiki/PBF_Format)).
 This library is focused on performance and provides pretty high-level data. if you need some lower level metadata,
 you might want to check out other libraries such as [osmpbf](https://crates.io/crates/osmpbf).
 
 [![Crates.io](https://img.shields.io/crates/v/osmpbf.svg)](https://crates.io/crates/fast-osmpbf)
 [![Documentation](https://docs.rs/fast-osmpbf/badge.svg)](https://docs.rs/fast-osmpbf)
-
 
 ## Benchmarks
 
@@ -21,18 +20,15 @@ What you see here is the mean time of these 10 runs.
 All problems were run using parallelization if the library offered a way to do it.
 ```
 
-
-| Problem         | fast-osmpbf |  osmpbf  | osmpbfreader |
-|-----------------|-------------|----------|--------------|
-| Count ways      | 13.51 s     | 19.06 s  | 39.58 s      |
-| Count addresses | 15.33 s     | 21.70 s  | 45.45 s      |
-
-
+| Problem         | fast-osmpbf | osmpbf  | osmpbfreader |
+| --------------- | ----------- | ------- | ------------ |
+| Count ways      | 13.51 s     | 19.06 s | 39.58 s      |
+| Count addresses | 15.33 s     | 21.70 s | 45.45 s      |
 
 ## Examples
 
-1) Count ways.
-We can (but dont have to) apply an element filter beforehand. Saves a little bit of computation.
+1. Count ways.
+   We can (but dont have to) apply an element filter beforehand. Saves a little bit of computation.
 
 ```rust
 use fast_osmpbf::*;
@@ -45,13 +41,7 @@ fn main() {
     let reader = OsmReader::from_path(path).expect("Invalid file path");
 
     // apply filter
-    reader
-        .apply_element_filter(ElementFilter {
-            nodes: false,
-            relations: false,
-            ways: true,
-        })
-        .expect("Invalid element filter");
+    reader.apply_element_filter(ElementFilter { nodes: false, relations: false, ways: true });
 
     // iterate using .blocks() (Parallelization happens, but only for one decoding step)
     let mut way_counter = 0;
@@ -67,9 +57,9 @@ fn main() {
 }
 ```
 
-2) Count elements that have full addresses.
-We apply a filter on tags beforehand. This filter does not only filtering on tags, it actually speeds up computing by using a cache.
-If you iterate over tags and you know you only need certain tags, apply the filter beforehand.
+2. Count elements that have full addresses.
+   We apply a filter on tags beforehand. This filter does not only filtering on tags, it actually speeds up computing by using a cache.
+   If you iterate over tags and you know you only need certain tags, apply the filter beforehand.
 
 ```rust
 use fast_osmpbf::*;
@@ -123,6 +113,6 @@ pub fn main() {
 This project is licensed under
 
 - Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
+  http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT)
+  http://opensource.org/licenses/MIT)

@@ -1,10 +1,7 @@
 use quick_protobuf::{BytesReader, MessageRead};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
-use crate::{
-    parser::OsmParser, BlobHeader, ElementBlock, ElementBlockIter, ElementFilter, ELEMENT_FILTER,
-    TAG_KEYS_FILTER, TAG_KEYS_FILTER_COUNT,
-};
+use crate::{BlobHeader, ELEMENT_FILTER, ElementBlock, ElementBlockIter, ElementFilter, TAG_KEYS_FILTER, parser::OsmParser};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -13,7 +10,7 @@ use std::{
 };
 
 const BUF_SIZE: usize = 1024 * 1024; // 1MB
-const MAX_BLOB_SIZE: usize = 1 * 1024 * 1024; // 32MB
+const MAX_BLOB_SIZE: usize = 32 * 1024 * 1024; // 32MB
 const MAX_HEADER_SIZE: usize = 64 * 1024; // 64KB
 const MAX_Q_ELEMENTS: usize = 1_000;
 const MAX_TAGS: usize = 8;
@@ -32,32 +29,20 @@ impl OsmReader {
         let path_ref = path.as_ref();
         let path = path.as_ref().to_string_lossy().to_string();
         if !path.ends_with(".osm.pbf") {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("File {} is not a .osm.pbf file", path),
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("File {} is not a .osm.pbf file", path)));
         }
         let file = File::open(path_ref)?;
         let reader = BufReader::with_capacity(BUF_SIZE, file);
 
-        Ok(Self {
-            reader,
-            header: Vec::with_capacity(MAX_HEADER_SIZE),
-            blob: Vec::with_capacity(MAX_BLOB_SIZE),
-        })
+        Ok(Self { reader, header: Vec::with_capacity(MAX_HEADER_SIZE), blob: Vec::with_capacity(MAX_BLOB_SIZE) })
     }
 
     /// Filters elements (dense_nodes, nodes, ways or relations) depending on the filter provided.
     /// If you only are interested in specific elements, I highly encourage you to use this mechanism
     /// over filtering yourself in the iterator since it not only does the filtering for you,
     /// but actually speeds up computation.
-    pub fn apply_element_filter(&self, filter: ElementFilter) -> Result<(), &'static str> {
-        if ELEMENT_FILTER.get().is_some() {
-            return Err("You cannot apply a filter more than once");
-        }
-
-        let _ = ELEMENT_FILTER.set(filter);
-        Ok(())
+    pub fn apply_element_filter(&self, filter: ElementFilter) {
+        *ELEMENT_FILTER.write().unwrap() = Some(filter);
     }
 
     /// Filters out all tags (key, value) where key is not one of your provided Strings.
@@ -66,12 +51,7 @@ impl OsmReader {
     /// but actually speeds up computation by abusing a caching mechanism.
     /// You can provide between 0 and 8 filter keys.
     pub fn apply_tag_filter(&self, tags: &[&str]) -> Result<(), &'static str> {
-        if TAG_KEYS_FILTER.get().is_some() {
-            return Err("You cannot apply a filter more than once");
-        }
-
         let total_tags = tags.len();
-
         if total_tags > MAX_TAGS {
             return Err("Not allowed to provide more than 8 tags");
         }
@@ -87,8 +67,7 @@ impl OsmReader {
 
         leaked.sort_unstable();
 
-        let _ = TAG_KEYS_FILTER.set(leaked.into_boxed_slice());
-        let _ = TAG_KEYS_FILTER_COUNT.set(tags.len());
+        *TAG_KEYS_FILTER.write().unwrap() = Some(leaked.into_boxed_slice());
         Ok(())
     }
 
@@ -101,8 +80,7 @@ impl OsmReader {
     pub fn blocks(self) -> ElementBlockIter {
         let num_threads = rayon::current_num_threads();
         let (blob_tx, blob_rx) = crossbeam_channel::bounded::<Arc<[u8]>>(num_threads);
-        let (element_block_tx, element_block_rx) =
-            crossbeam_channel::bounded::<ElementBlock>(MAX_Q_ELEMENTS);
+        let (element_block_tx, element_block_rx) = crossbeam_channel::bounded::<ElementBlock>(MAX_Q_ELEMENTS);
 
         // Spawn a thread to continuously read blobs
         std::thread::spawn(move || {
@@ -114,10 +92,7 @@ impl OsmReader {
             }
         });
 
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .expect("Failed to create thread pool");
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().expect("Failed to create thread pool");
 
         // Spawn parsing tasks inside the pool
         std::thread::spawn(move || {
@@ -134,9 +109,7 @@ impl OsmReader {
             });
         });
 
-        ElementBlockIter {
-            rx: element_block_rx,
-        }
+        ElementBlockIter { rx: element_block_rx }
     }
 
     // Sequential operation - raw blobs have different sizes, need to look at length prefix and blob header first to know exact size

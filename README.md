@@ -1,6 +1,6 @@
-fast-osmpbf
-======
-A high-performance Rust library for reading OpenStreetMap files [*.osm.pbf](https://wiki.openstreetmap.org/wiki/PBF_Format).
+# fast-osmpbf
+
+A high-performance Rust library for reading OpenStreetMap files [\*.osm.pbf](https://wiki.openstreetmap.org/wiki/PBF_Format).
 Also exposes NodeJS bindings. Available on cargo and npm.
 
 [![Crates.io](https://img.shields.io/crates/v/osmpbf.svg)](https://crates.io/crates/fast-osmpbf)
@@ -23,15 +23,15 @@ All problems were run using parallelization if the library offered a way to do i
 
 ### Rust
 
-| Problem         | fast-osmpbf |  osmpbf  | osmpbfreader |
-|-----------------|-------------|----------|--------------|
-| Count ways      | 13.51 s     | 19.06 s  | 39.58 s      |
-| Count addresses | 15.33 s     | 21.70 s  | 45.45 s      |
+| Problem         | fast-osmpbf | osmpbf  | osmpbfreader |
+| --------------- | ----------- | ------- | ------------ |
+| Count ways      | 13.51 s     | 19.06 s | 39.58 s      |
+| Count addresses | 15.33 s     | 21.70 s | 45.45 s      |
 
 ### NodeJS
 
 | Problem         | fast-osmpbf-js | osm-pbf-parser | osm-read |
-|-----------------|----------------|----------------|----------|
+| --------------- | -------------- | -------------- | -------- |
 | Count ways      | 18.10 s        | 330.57 s       | 523.80 s |
 | Count addresses | 30.04 s        | 359.06 s       | 603.33 s |
 
@@ -50,11 +50,12 @@ npm install fast-osmpbf-js
 ```
 
 ## Examples
+
 ### Rust
 
-1) Count ways.
-We can (but dont have to) apply an element filter beforehand. In the original Rust library version,
-this does not speed up computation by a lot because blocks are loaded lazily.
+1. Count ways.
+   We can (but dont have to) apply an element filter beforehand. In the original Rust library version,
+   this does not speed up computation by a lot because blocks are loaded lazily.
 
 ```rust
 use fast_osmpbf::*;
@@ -67,13 +68,7 @@ fn main() {
     let reader = OsmReader::from_path(path).expect("Invalid file path");
 
     // apply filter
-    reader
-        .apply_element_filter(ElementFilter {
-            nodes: false,
-            relations: false,
-            ways: true,
-        })
-        .expect("Invalid element filter");
+    reader.apply_element_filter(ElementFilter { nodes: false, relations: false, ways: true });
 
     // iterate using .blocks() (Parallelization happens, but only for one decoding step)
     let mut way_counter = 0;
@@ -89,9 +84,9 @@ fn main() {
 }
 ```
 
-2) Count elements that have full addresses.
-We apply a filter on tags beforehand. This filter does not only filtering on tags, it actually speeds up computing by using a cache.
-If you iterate over tags and you know you only need certain tags, apply the filter beforehand.
+2. Count elements that have full addresses.
+   We apply a filter on tags beforehand. This filter does not only filtering on tags, it actually speeds up computing by using a cache.
+   If you iterate over tags and you know you only need certain tags, apply the filter beforehand.
 
 ```rust
 use fast_osmpbf::*;
@@ -142,9 +137,9 @@ pub fn main() {
 
 ### NodeJS
 
-1) Count ways.
-Since we dont need tags here and we know we only need ways, we apply a tag filter and an element filter beforehand,
-which basicly avoids sending any tag elements, nodes and relations from Rust to NodeJS. This speeds up computation significantly.
+1. Count ways.
+   Since we dont need tags here and we know we only need ways, we apply a tag filter and an element filter beforehand,
+   which basicly avoids sending any tag elements, nodes and relations from Rust to NodeJS. This speeds up computation significantly.
 
 ```js
 import { JsElementBlock, OsmReader, getNodeIds, getRelationMembers, getTags } from "fast-osmpbf-js"
@@ -170,8 +165,8 @@ async function main() {
 }
 ```
 
-2) Count elements that have full addresses.
-Since we know which tags we need here, we apply a tag filter and speed up computation here as well.
+2. Count elements that have full addresses.
+   Since we know which tags we need here, we apply a tag filter and speed up computation here as well.
 
 ```js
 import { JsElementBlock, OsmReader, getTags } from "fast-osmpbf-js"
@@ -204,6 +199,6 @@ async function main() {
 This project is licensed under
 
 - Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
+  http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT)
+  http://opensource.org/licenses/MIT)

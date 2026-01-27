@@ -1,14 +1,20 @@
 use crate::{DenseNodes, MemberType, Node, Relation, Way};
 use crossbeam_channel::Receiver;
-use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::{borrow::Cow, sync::Arc};
 
-pub(crate) static TAG_KEYS_FILTER: OnceLock<Box<[&'static str]>> = OnceLock::new();
-pub(crate) static TAG_KEYS_FILTER_COUNT: OnceLock<usize> = OnceLock::new();
+pub(crate) static TAG_KEYS_FILTER: RwLock<Option<Box<[&'static str]>>> = RwLock::new(None);
+pub(crate) fn get_tags_filter() -> Option<Box<[&'static str]>> {
+    TAG_KEYS_FILTER.read().unwrap().as_ref().cloned()
+}
 
-pub(crate) static ELEMENT_FILTER: OnceLock<ElementFilter> = OnceLock::new();
+pub(crate) static ELEMENT_FILTER: RwLock<Option<ElementFilter>> = RwLock::new(None);
+pub(crate) fn get_element_filter() -> Option<ElementFilter> {
+    ELEMENT_FILTER.read().unwrap().as_ref().cloned()
+}
 
 /// An optional filter you can apply that speeds up computation
+#[derive(Clone, Debug)]
 pub struct ElementFilter {
     /// Whether [`Node`] and [`DenseNodes`] should be parsed
     pub nodes: bool,
@@ -70,10 +76,7 @@ impl DenseNodeBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table
-            .iter()
-            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
-            .collect()
+        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -93,7 +96,7 @@ impl DenseNodeBlock {
         let mut last_lat = 0i64;
         let mut last_lon = 0i64;
 
-        let use_cache = TAG_KEYS_FILTER.get().is_some();
+        let use_cache = get_tags_filter().is_some();
 
         for node_idx in 0..len {
             // delta decode
@@ -106,11 +109,7 @@ impl DenseNodeBlock {
             longitudes.push((last_lon * self.granularity + self.lon_offset) as f64 * 1e-9);
 
             let start = self.kv_offsets[node_idx];
-            let end = self
-                .kv_offsets
-                .get(node_idx + 1)
-                .copied()
-                .unwrap_or(self.nodes.keys_vals.len());
+            let end = self.kv_offsets.get(node_idx + 1).copied().unwrap_or(self.nodes.keys_vals.len());
 
             let mut i = start;
             while i + 1 < end {
@@ -169,13 +168,7 @@ impl<'a> DenseNodeRef<'a> {
         let slice = &self.block.nodes.keys_vals[start..end];
         let table = &self.block.table;
 
-        DenseNodeTagIter {
-            slice,
-            table,
-            pos: 0,
-            cached_tag_ids: self.cached_tag_ids,
-            use_cache: TAG_KEYS_FILTER.get().is_some(),
-        }
+        DenseNodeTagIter { slice, table, pos: 0, cached_tag_ids: self.cached_tag_ids, use_cache: get_tags_filter().is_some() }
     }
 }
 struct DenseNodeIter<'a> {
@@ -238,13 +231,7 @@ impl NodeBlock {
         let mut prev_lon = 0i64;
 
         self.nodes.iter().map(move |node| {
-            let node_ref = NodeRef {
-                node,
-                cached_tag_ids: &self.cached_tag_ids,
-                table: &self.table,
-                prev_lat,
-                prev_lon,
-            };
+            let node_ref = NodeRef { node, cached_tag_ids: &self.cached_tag_ids, table: &self.table, prev_lat, prev_lon };
 
             prev_lat += node.lat;
             prev_lon += node.lon;
@@ -259,10 +246,7 @@ impl NodeBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table
-            .iter()
-            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
-            .collect()
+        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -282,7 +266,7 @@ impl NodeBlock {
         let mut last_lat = 0i64;
         let mut last_lon = 0i64;
 
-        let use_cache = TAG_KEYS_FILTER.get().is_some();
+        let use_cache = get_tags_filter().is_some();
 
         for node in self.nodes.iter() {
             ids.push(node.id);
@@ -341,7 +325,7 @@ impl<'a> NodeRef<'a> {
             table: self.table,
             pos: 0,
             cached_tag_ids: self.cached_tag_ids,
-            use_cache: TAG_KEYS_FILTER.get().is_some(),
+            use_cache: get_tags_filter().is_some(),
         }
     }
 }
@@ -361,11 +345,7 @@ pub struct WayBlock {
 impl WayBlock {
     /// Creates an iterator over [`WayRef`]
     pub fn iter(&self) -> impl Iterator<Item = WayRef<'_>> {
-        self.ways.iter().map(move |way| WayRef {
-            way,
-            cached_tag_ids: &self.cached_tag_ids,
-            table: &self.table,
-        })
+        self.ways.iter().map(move |way| WayRef { way, cached_tag_ids: &self.cached_tag_ids, table: &self.table })
     }
     /// Get the number of [`WayRef`]
     pub fn len(&self) -> usize {
@@ -374,10 +354,7 @@ impl WayBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table
-            .iter()
-            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
-            .collect()
+        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -394,7 +371,7 @@ impl WayBlock {
         let mut node_offsets = Vec::with_capacity(len + 1);
         node_offsets.push(0);
 
-        let use_cache = TAG_KEYS_FILTER.get().is_some();
+        let use_cache = get_tags_filter().is_some();
 
         for way in self.ways.iter() {
             ids.push(way.id);
@@ -451,7 +428,7 @@ impl<'a> WayRef<'a> {
             table: self.table,
             pos: 0,
             cached_tag_ids: self.cached_tag_ids,
-            use_cache: TAG_KEYS_FILTER.get().is_some(),
+            use_cache: get_tags_filter().is_some(),
         }
     }
 }
@@ -484,10 +461,7 @@ impl RelationBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table
-            .iter()
-            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
-            .collect()
+        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -517,7 +491,7 @@ impl RelationBlock {
         let mut member_offsets = Vec::with_capacity(len + 1);
         member_offsets.push(0);
 
-        let use_cache = TAG_KEYS_FILTER.get().is_some();
+        let use_cache = get_tags_filter().is_some();
 
         for rel in self.relations.iter() {
             ids.push(rel.id);
@@ -542,16 +516,7 @@ impl RelationBlock {
             member_offsets.push(member_ids.len() as u32);
         }
 
-        (
-            ids,
-            key_ids,
-            val_ids,
-            kv_offsets,
-            member_ids,
-            member_types,
-            member_roles,
-            member_offsets,
-        )
+        (ids, key_ids, val_ids, kv_offsets, member_ids, member_types, member_roles, member_offsets)
     }
 }
 
@@ -589,7 +554,7 @@ impl<'a> RelationRef<'a> {
             table: self.table,
             pos: 0,
             cached_tag_ids: self.cached_tag_ids,
-            use_cache: TAG_KEYS_FILTER.get().is_some(),
+            use_cache: get_tags_filter().is_some(),
         }
     }
 }
@@ -646,11 +611,7 @@ impl<'a> Iterator for RelationMemberIter<'a> {
         // just a mistake when proto format was defined
         let role = unsafe { std::str::from_utf8_unchecked(&self.table[role_sid as usize]) };
 
-        Some(RelationMember {
-            memid: self.prev_memid,
-            role,
-            member_type,
-        })
+        Some(RelationMember { memid: self.prev_memid, role, member_type })
     }
 }
 
@@ -677,10 +638,9 @@ impl<'a> Iterator for DenseNodeTagIter<'a> {
             if self.use_cache && !self.cached_tag_ids.contains(&(k as u32)) {
                 continue;
             }
-            return Some((
-                unsafe { std::str::from_utf8_unchecked(&self.table[k]) },
-                unsafe { std::str::from_utf8_unchecked(&self.table[v]) },
-            ));
+            return Some((unsafe { std::str::from_utf8_unchecked(&self.table[k]) }, unsafe {
+                std::str::from_utf8_unchecked(&self.table[v])
+            }));
         }
         None
     }
@@ -700,7 +660,7 @@ impl<'a> DenseNodeTagIter<'a> {
     /// Essentially the same as calling .len() == <FILTER_COUNT_APPLIED>
     #[inline]
     pub fn has_all_filter_keys(self) -> bool {
-        Some(&self.len()) == TAG_KEYS_FILTER_COUNT.get()
+        Some(self.len()) == get_tags_filter().map(|b| b.len())
     }
 }
 
@@ -724,10 +684,9 @@ impl<'a> Iterator for TagIter<'a> {
             if self.use_cache && !self.cached_tag_ids.contains(&(k as u32)) {
                 continue;
             }
-            return Some((
-                unsafe { std::str::from_utf8_unchecked(&self.table[k]) },
-                unsafe { std::str::from_utf8_unchecked(&self.table[v]) },
-            ));
+            return Some((unsafe { std::str::from_utf8_unchecked(&self.table[k]) }, unsafe {
+                std::str::from_utf8_unchecked(&self.table[v])
+            }));
         }
         None
     }
@@ -747,7 +706,7 @@ impl<'a> TagIter<'a> {
     /// Essentially the same as calling .len() == <FILTER_COUNT_APPLIED>
     #[inline]
     pub fn has_all_filter_keys(self) -> bool {
-        Some(&self.len()) == TAG_KEYS_FILTER_COUNT.get()
+        Some(self.len()) == get_tags_filter().map(|b| b.len())
     }
 }
 

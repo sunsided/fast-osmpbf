@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, Read},
+    io::{BufReader, ErrorKind, Read},
     path::Path,
     sync::Arc,
 };
@@ -18,16 +18,87 @@ const MAX_HEADER_SIZE: usize = 64 * 1024; // 64KB
 const MAX_Q_ELEMENTS: usize = 1_000;
 const MAX_TAGS: usize = 8;
 
+#[derive(Debug)]
+enum Source {
+    Buffered(BufReader<File>),
+    #[cfg(feature = "mmap")]
+    Mmap {
+        map: memmap2::Mmap,
+        pos: usize,
+    },
+}
+
+impl Source {
+    fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        match self {
+            Source::Buffered(reader) => reader.read_exact(buf),
+            #[cfg(feature = "mmap")]
+            Source::Mmap { map, pos } => {
+                let n = buf.len();
+                if *pos + n > map.len() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "unexpected EOF",
+                    ));
+                }
+                buf.copy_from_slice(&map[*pos..*pos + n]);
+                *pos += n;
+                Ok(())
+            }
+        }
+    }
+
+    fn skip(&mut self, n: usize) -> std::io::Result<()> {
+        match self {
+            Source::Buffered(reader) => reader.seek_relative(n as i64).map(|_| ()),
+            #[cfg(feature = "mmap")]
+            Source::Mmap { map, pos } => {
+                if *pos + n > map.len() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "unexpected EOF",
+                    ));
+                }
+                *pos += n;
+                Ok(())
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn peek_slice(&mut self, n: usize) -> std::io::Result<&[u8]> {
+        match self {
+            Source::Buffered(_) => {
+                let _ = n;
+                Err(std::io::Error::new(
+                    ErrorKind::Unsupported,
+                    "peek_slice not supported for buffered source",
+                ))
+            }
+            #[cfg(feature = "mmap")]
+            Source::Mmap { map, pos } => {
+                if *pos + n > map.len() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "unexpected EOF",
+                    ));
+                }
+                Ok(&map[*pos..*pos + n])
+            }
+        }
+    }
+}
+
 /// Reader that reads bytes from .osm.pbf file and passes them on to the parser
 #[derive(Debug)]
 pub struct OsmReader {
-    reader: BufReader<File>,
+    source: Source,
     header: Vec<u8>,
     blob: Vec<u8>,
 }
 
 impl OsmReader {
-    /// Creates a new OsmReader from a file path
+    /// Creates a new OsmReader from a file path using buffered I/O
     pub fn from_path<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let path_ref = path.as_ref();
         let path = path.as_ref().to_string_lossy().to_string();
@@ -41,7 +112,40 @@ impl OsmReader {
         let reader = BufReader::with_capacity(BUF_SIZE, file);
 
         Ok(Self {
-            reader,
+            source: Source::Buffered(reader),
+            header: Vec::with_capacity(MAX_HEADER_SIZE),
+            blob: Vec::with_capacity(MAX_BLOB_SIZE),
+        })
+    }
+
+    /// Creates a new OsmReader from a file path using memory-mapped I/O.
+    ///
+    /// # Safety
+    /// Memory-mapping exposes the file contents to the process's address space.
+    /// If the underlying file is modified concurrently by another process,
+    /// the mmap'd region may reflect those changes without synchronization,
+    /// potentially leading to inconsistent reads or undefined behavior.
+    ///
+    /// # Trade-offs
+    /// - **Linux/macOS**: Typically faster for large files; the OS page cache
+    ///   handles I/O without extra user-space copies.
+    /// - **Windows**: Performance may be worse than buffered I/O for some workloads.
+    /// - Requires virtual address space ≥ file size.
+    #[cfg(feature = "mmap")]
+    pub fn from_path_mmap<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        let path_ref = path.as_ref();
+        let path = path.as_ref().to_string_lossy().to_string();
+        if !path.ends_with(".osm.pbf") {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("File {} is not a .osm.pbf file", path),
+            ));
+        }
+        let file = File::open(path_ref)?;
+        let map = unsafe { memmap2::Mmap::map(&file)? };
+
+        Ok(Self {
+            source: Source::Mmap { map, pos: 0 },
             header: Vec::with_capacity(MAX_HEADER_SIZE),
             blob: Vec::with_capacity(MAX_BLOB_SIZE),
         })
@@ -133,7 +237,7 @@ impl OsmReader {
         let mut prefix = [0u8; 4];
 
         // Read length prefix (always 4 bytes)
-        if self.reader.read_exact(&mut prefix).is_err() {
+        if self.source.read_exact(&mut prefix).is_err() {
             return Ok(None); // EOF
         }
 
@@ -148,7 +252,7 @@ impl OsmReader {
         if self.header.len() < header_size {
             self.header.resize(header_size, 0);
         }
-        self.reader.read_exact(&mut self.header[..header_size])?;
+        self.source.read_exact(&mut self.header[..header_size])?;
 
         // Deserialize blob header to get size of blob
         let mut reader = BytesReader::from_bytes(&self.header[..header_size]);
@@ -158,20 +262,20 @@ impl OsmReader {
 
         // Skip everything that is not actual relevant data
         if header.type_pb != "OSMData" {
-            self.reader.seek_relative(blob_size as i64)?;
+            self.source.skip(blob_size)?;
             return self.next_blob();
         }
 
         if self.blob.len() < blob_size {
             // grow buffer slightly larger to reduce repeated reallocs
-            let new_capacity = (blob_size * 2);
+            let new_capacity = blob_size * 2;
             self.blob.resize(new_capacity, 0);
         }
 
         if self.blob.len() < blob_size {
             self.blob.resize(blob_size, 0);
         }
-        self.reader.read_exact(&mut self.blob[..blob_size])?;
+        self.source.read_exact(&mut self.blob[..blob_size])?;
         let blob_slice: Arc<[u8]> = Arc::from(&self.blob[..blob_size]);
 
         Ok(Some(blob_slice))

@@ -145,6 +145,39 @@ cargo flame-bench
 
 Each command produces `flamegraph.svg` in the current directory.
 
+## Features
+
+This crate supports the following optional Cargo features:
+
+| Feature | Description |
+| ------- | ----------- |
+| `mmap` | Enable memory-mapped file I/O via `from_path_mmap` for potentially faster reads on large files. |
+
+### Using the `mmap` feature
+
+When the `mmap` feature is enabled, you can use `OsmReader::from_path_mmap` to memory-map the PBF file instead of using buffered I/O:
+
+```toml
+[dependencies]
+fast-osmpbf = { version = "0.2", features = ["mmap"] }
+```
+
+```rust,ignore
+use fast_osmpbf::*;
+
+fn main() {
+    let arg = std::env::args_os()
+        .nth(1)
+        .expect("need a *.osm.pbf file as argument");
+    let path = std::path::Path::new(&arg);
+    let reader = OsmReader::from_path_mmap(path).expect("Invalid file path");
+
+    reader.blocks().for_each(|block| {
+        // process blocks...
+    });
+}
+```
+
 ## License
 
 This project is licensed under

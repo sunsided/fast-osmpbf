@@ -72,50 +72,45 @@ impl OsmParser {
 
         for group in block.primitivegroup {
             if let Some(dense_nodes) = group.dense
-                && element_filter.as_ref().is_none_or(|f| f.nodes) {
-                    let table = Arc::clone(&stringtable);
-                    elements.push(ElementBlock::DenseNodeBlock(DenseNodeBlock {
-                        table,
-                        cached_tag_ids: Arc::clone(&cached_tag_ids),
-                        granularity: block.granularity,
-                        lat_offset: block.lat_offset,
-                        lon_offset: block.lon_offset,
-                        kv_offsets: Self::compute_offsets(
-                            &dense_nodes.keys_vals,
-                            dense_nodes.id.len(),
-                        ),
-                        nodes: Arc::from(dense_nodes),
-                    }));
-                }
-            if !group.nodes.is_empty()
-                && element_filter.as_ref().is_none_or(|f| f.nodes) {
-                    let table = Arc::clone(&stringtable);
-                    elements.push(ElementBlock::NodeBlock(NodeBlock {
-                        nodes: Arc::from(group.nodes),
-                        cached_tag_ids: Arc::clone(&cached_tag_ids),
-                        table,
-                    }));
-                }
+                && element_filter.as_ref().is_none_or(|f| f.nodes)
+            {
+                let table = Arc::clone(&stringtable);
+                elements.push(ElementBlock::DenseNodeBlock(DenseNodeBlock {
+                    table,
+                    cached_tag_ids: Arc::clone(&cached_tag_ids),
+                    granularity: block.granularity,
+                    lat_offset: block.lat_offset,
+                    lon_offset: block.lon_offset,
+                    kv_offsets: Self::compute_offsets(&dense_nodes.keys_vals, dense_nodes.id.len()),
+                    nodes: Arc::from(dense_nodes),
+                }));
+            }
+            if !group.nodes.is_empty() && element_filter.as_ref().is_none_or(|f| f.nodes) {
+                let table = Arc::clone(&stringtable);
+                elements.push(ElementBlock::NodeBlock(NodeBlock {
+                    nodes: Arc::from(group.nodes),
+                    cached_tag_ids: Arc::clone(&cached_tag_ids),
+                    table,
+                }));
+            }
 
-            if !group.ways.is_empty()
-                && element_filter.as_ref().is_none_or(|f| f.ways) {
-                    let table = Arc::clone(&stringtable);
-                    elements.push(ElementBlock::WayBlock(WayBlock {
-                        ways: Arc::from(group.ways),
-                        cached_tag_ids: Arc::clone(&cached_tag_ids),
-                        table,
-                    }));
-                }
+            if !group.ways.is_empty() && element_filter.as_ref().is_none_or(|f| f.ways) {
+                let table = Arc::clone(&stringtable);
+                elements.push(ElementBlock::WayBlock(WayBlock {
+                    ways: Arc::from(group.ways),
+                    cached_tag_ids: Arc::clone(&cached_tag_ids),
+                    table,
+                }));
+            }
 
-            if !group.relations.is_empty()
-                && element_filter.as_ref().is_none_or(|f| f.relations) {
-                    let table = Arc::clone(&stringtable);
-                    elements.push(ElementBlock::RelationBlock(RelationBlock {
-                        relations: Arc::from(group.relations),
-                        cached_tag_ids: Arc::clone(&cached_tag_ids),
-                        table,
-                    }));
-                }
+            if !group.relations.is_empty() && element_filter.as_ref().is_none_or(|f| f.relations) {
+                let table = Arc::clone(&stringtable);
+                elements.push(ElementBlock::RelationBlock(RelationBlock {
+                    relations: Arc::from(group.relations),
+                    cached_tag_ids: Arc::clone(&cached_tag_ids),
+                    table,
+                }));
+            }
         }
 
         Ok(elements)

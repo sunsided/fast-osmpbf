@@ -16,9 +16,12 @@ use std::{
 use crate::io_hints::open_sequential_read_only;
 
 #[cfg(not(feature = "io-hints"))]
+use std::fs::OpenOptions;
+
+#[cfg(not(feature = "io-hints"))]
 #[inline]
 fn open_file<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
-    File::open(path)
+    OpenOptions::new().read(true).open(path)
 }
 
 #[cfg(feature = "io-hints")]
@@ -140,6 +143,11 @@ impl OsmReader {
     /// If the underlying file is modified concurrently by another process,
     /// the mmap'd region may reflect those changes without synchronization,
     /// potentially leading to inconsistent reads or undefined behavior.
+    ///
+    /// To mitigate this, the file is opened read-only with an advisory shared
+    /// lock (`LOCK_SH` on Unix, write-sharing denied on Windows), which
+    /// prevents other processes that cooperate with advisory locking from
+    /// modifying the file while the reader is active.
     ///
     /// # Trade-offs
     /// - **Linux/macOS**: Typically faster for large files; the OS page cache

@@ -19,6 +19,7 @@ flate2 = { version = "1.1.5", features = ["zlib-rs"], default-features = false }
 crossbeam-channel = "0.5"
 xz2 = "0.1.7"
 memmap2 = { version = "0.9", optional = true }
+rustix = { version = "1", features = ["fs"], optional = true }
 
 [build-dependencies]
 pb-rs = "0.10.0"
@@ -39,3 +40,4 @@ strip = false
 [features]
 node_bindings = []
 mmap = ["dep:memmap2"]
+io-hints = ["dep:rustix"]

@@ -12,6 +12,21 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "io-hints")]
+use crate::io_hints::open_sequential_read_only;
+
+#[cfg(not(feature = "io-hints"))]
+#[inline]
+fn open_file<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
+    File::open(path)
+}
+
+#[cfg(feature = "io-hints")]
+#[inline]
+fn open_file<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
+    open_sequential_read_only(path)
+}
+
 const BUF_SIZE: usize = 1024 * 1024; // 1MB
 const MAX_BLOB_SIZE: usize = 32 * 1024 * 1024; // 32MB
 const MAX_HEADER_SIZE: usize = 64 * 1024; // 64KB
@@ -108,7 +123,7 @@ impl OsmReader {
                 format!("File {} is not a .osm.pbf file", path),
             ));
         }
-        let file = File::open(path_ref)?;
+        let file = open_file(path_ref)?;
         let reader = BufReader::with_capacity(BUF_SIZE, file);
 
         Ok(Self {
@@ -141,8 +156,11 @@ impl OsmReader {
                 format!("File {} is not a .osm.pbf file", path),
             ));
         }
-        let file = File::open(path_ref)?;
+        let file = open_file(path_ref)?;
         let map = unsafe { memmap2::Mmap::map(&file)? };
+
+        #[cfg(all(feature = "mmap", feature = "io-hints"))]
+        let _ = map.advise(memmap2::Advice::Sequential);
 
         Ok(Self {
             source: Source::Mmap { map, pos: 0 },

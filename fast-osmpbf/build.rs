@@ -19,7 +19,7 @@ fn main() {
     protos.push(format!("{}/{}", in_dir, "osmdata.proto"));
     protos.push(format!("{}/{}", in_dir, "osmformat.proto"));
 
-    let config = ConfigBuilder::new(&protos, None, Some(&&out_dir), &[in_dir])
+    let config = ConfigBuilder::new(&protos, None, Some(&out_dir), &[in_dir])
         .expect("could not generate pb-rs config");
 
     let descriptor = config.build();

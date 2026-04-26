@@ -71,8 +71,8 @@ impl OsmParser {
         let mut elements: Vec<ElementBlock> = Vec::with_capacity(element_count);
 
         for group in block.primitivegroup {
-            if let Some(dense_nodes) = group.dense {
-                if element_filter.as_ref().map_or(true, |f| f.nodes) {
+            if let Some(dense_nodes) = group.dense
+                && element_filter.as_ref().is_none_or(|f| f.nodes) {
                     let table = Arc::clone(&stringtable);
                     elements.push(ElementBlock::DenseNodeBlock(DenseNodeBlock {
                         table,
@@ -87,9 +87,8 @@ impl OsmParser {
                         nodes: Arc::from(dense_nodes),
                     }));
                 }
-            }
-            if !group.nodes.is_empty() {
-                if element_filter.as_ref().map_or(true, |f| f.nodes) {
+            if !group.nodes.is_empty()
+                && element_filter.as_ref().is_none_or(|f| f.nodes) {
                     let table = Arc::clone(&stringtable);
                     elements.push(ElementBlock::NodeBlock(NodeBlock {
                         nodes: Arc::from(group.nodes),
@@ -97,10 +96,9 @@ impl OsmParser {
                         table,
                     }));
                 }
-            }
 
-            if !group.ways.is_empty() {
-                if element_filter.as_ref().map_or(true, |f| f.ways) {
+            if !group.ways.is_empty()
+                && element_filter.as_ref().is_none_or(|f| f.ways) {
                     let table = Arc::clone(&stringtable);
                     elements.push(ElementBlock::WayBlock(WayBlock {
                         ways: Arc::from(group.ways),
@@ -108,10 +106,9 @@ impl OsmParser {
                         table,
                     }));
                 }
-            }
 
-            if !group.relations.is_empty() {
-                if element_filter.as_ref().map_or(true, |f| f.relations) {
+            if !group.relations.is_empty()
+                && element_filter.as_ref().is_none_or(|f| f.relations) {
                     let table = Arc::clone(&stringtable);
                     elements.push(ElementBlock::RelationBlock(RelationBlock {
                         relations: Arc::from(group.relations),
@@ -119,7 +116,6 @@ impl OsmParser {
                         table,
                     }));
                 }
-            }
         }
 
         Ok(elements)

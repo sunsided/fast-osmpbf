@@ -581,7 +581,7 @@ impl<'a> RelationRef<'a> {
             memids: &self.relation.memids,
             roles: &self.relation.roles_sid,
             types: &self.relation.types,
-            table: &self.table,
+            table: self.table,
             index: 0,
             prev_memid: 0,
         }

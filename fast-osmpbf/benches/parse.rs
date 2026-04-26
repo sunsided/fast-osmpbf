@@ -15,7 +15,10 @@ fn bench_path() -> PathBuf {
 fn reader_from_path(c: &mut Criterion) {
     let path = bench_path();
     if !path.exists() {
-        eprintln!("Skipping reader_from_path: fixture not found at {}", path.display());
+        eprintln!(
+            "Skipping reader_from_path: fixture not found at {}",
+            path.display()
+        );
         return;
     }
     c.bench_function("reader_from_path", |b| {
@@ -28,7 +31,10 @@ fn reader_from_path(c: &mut Criterion) {
 fn blocks_count_all(c: &mut Criterion) {
     let path = bench_path();
     if !path.exists() {
-        eprintln!("Skipping blocks_count_all: fixture not found at {}", path.display());
+        eprintln!(
+            "Skipping blocks_count_all: fixture not found at {}",
+            path.display()
+        );
         return;
     }
     c.bench_function("blocks_count_all", |b| {
@@ -49,7 +55,10 @@ fn blocks_count_all(c: &mut Criterion) {
 fn par_blocks_count(c: &mut Criterion) {
     let path = bench_path();
     if !path.exists() {
-        eprintln!("Skipping par_blocks_count: fixture not found at {}", path.display());
+        eprintln!(
+            "Skipping par_blocks_count: fixture not found at {}",
+            path.display()
+        );
         return;
     }
     c.bench_function("par_blocks_count", |b| {
@@ -72,7 +81,10 @@ fn par_blocks_count(c: &mut Criterion) {
 fn count_ways(c: &mut Criterion) {
     let path = bench_path();
     if !path.exists() {
-        eprintln!("Skipping count_ways: fixture not found at {}", path.display());
+        eprintln!(
+            "Skipping count_ways: fixture not found at {}",
+            path.display()
+        );
         return;
     }
     c.bench_function("count_ways", |b| {
@@ -100,7 +112,10 @@ fn count_ways(c: &mut Criterion) {
 fn count_addresses(c: &mut Criterion) {
     let path = bench_path();
     if !path.exists() {
-        eprintln!("Skipping count_addresses: fixture not found at {}", path.display());
+        eprintln!(
+            "Skipping count_addresses: fixture not found at {}",
+            path.display()
+        );
         return;
     }
     c.bench_function("count_addresses", |b| {
@@ -117,10 +132,18 @@ fn count_addresses(c: &mut Criterion) {
             let count: usize = reader
                 .par_blocks()
                 .map(|block| match block {
-                    ElementBlock::DenseNodeBlock(b) => b.iter().filter(|n| n.tags().has_all_filter_keys()).count(),
-                    ElementBlock::NodeBlock(b) => b.iter().filter(|n| n.tags().has_all_filter_keys()).count(),
-                    ElementBlock::WayBlock(b) => b.iter().filter(|w| w.tags().has_all_filter_keys()).count(),
-                    ElementBlock::RelationBlock(b) => b.iter().filter(|r| r.tags().has_all_filter_keys()).count(),
+                    ElementBlock::DenseNodeBlock(b) => {
+                        b.iter().filter(|n| n.tags().has_all_filter_keys()).count()
+                    }
+                    ElementBlock::NodeBlock(b) => {
+                        b.iter().filter(|n| n.tags().has_all_filter_keys()).count()
+                    }
+                    ElementBlock::WayBlock(b) => {
+                        b.iter().filter(|w| w.tags().has_all_filter_keys()).count()
+                    }
+                    ElementBlock::RelationBlock(b) => {
+                        b.iter().filter(|r| r.tags().has_all_filter_keys()).count()
+                    }
                 })
                 .sum();
             criterion::black_box(count);

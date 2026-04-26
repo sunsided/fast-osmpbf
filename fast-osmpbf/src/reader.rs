@@ -164,7 +164,7 @@ impl OsmReader {
 
         if self.blob.len() < blob_size {
             // grow buffer slightly larger to reduce repeated reallocs
-            let new_capacity = (blob_size * 2) as usize;
+            let new_capacity = (blob_size * 2);
             self.blob.resize(new_capacity, 0);
         }
 
@@ -174,6 +174,6 @@ impl OsmReader {
         self.reader.read_exact(&mut self.blob[..blob_size])?;
         let blob_slice: Arc<[u8]> = Arc::from(&self.blob[..blob_size]);
 
-        return Ok(Some(blob_slice));
+        Ok(Some(blob_slice))
     }
 }

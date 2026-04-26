@@ -1,5 +1,6 @@
 use crate::{
-    Blob, DenseNodeBlock, ElementBlock, NodeBlock, PrimitiveBlock, RelationBlock, WayBlock, get_element_filter, get_tags_filter,
+    Blob, DenseNodeBlock, ElementBlock, NodeBlock, PrimitiveBlock, RelationBlock, WayBlock,
+    get_element_filter, get_tags_filter,
 };
 use quick_protobuf::{BytesReader, MessageRead};
 use std::{borrow::Cow, io::Read, sync::Arc};
@@ -12,8 +13,8 @@ impl OsmParser {
     pub(crate) fn deserialize_blob(blob_slice: Arc<[u8]>) -> std::io::Result<Vec<ElementBlock>> {
         // Deserialize blob
         let mut reader = BytesReader::from_bytes(&blob_slice);
-        let blob =
-            Blob::from_reader(&mut reader, &blob_slice).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let blob = Blob::from_reader(&mut reader, &blob_slice)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         // either take the raw_size if available or use 2 * compressed_size as heuristic
         let size = match blob.raw_size {
@@ -30,7 +31,10 @@ impl OsmParser {
             let mut decoder = xz2::read::XzDecoder::new(&lzma[..]);
             decoder.read_to_end(&mut decompressed_blob)?;
         } else {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Empty OSMData blob"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Empty OSMData blob",
+            ));
         };
 
         Self::parse_blob(&decompressed_blob)
@@ -40,7 +44,12 @@ impl OsmParser {
         let mut reader = BytesReader::from_bytes(blob);
         let block = PrimitiveBlock::from_reader(&mut reader, blob)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let table: Vec<Cow<'static, [u8]>> = block.stringtable.s.into_iter().map(|s| Cow::Owned(s.to_vec())).collect();
+        let table: Vec<Cow<'static, [u8]>> = block
+            .stringtable
+            .s
+            .into_iter()
+            .map(|s| Cow::Owned(s.to_vec()))
+            .collect();
         let stringtable = Arc::new(table);
         let cached_tag_ids = match get_tags_filter() {
             Some(_) => Self::get_tag_ids(&stringtable),
@@ -52,7 +61,12 @@ impl OsmParser {
         let element_count: usize = block
             .primitivegroup
             .iter()
-            .map(|g| g.nodes.len() + g.ways.len() + g.relations.len() + g.dense.as_ref().map_or(0, |d| d.id.len()))
+            .map(|g| {
+                g.nodes.len()
+                    + g.ways.len()
+                    + g.relations.len()
+                    + g.dense.as_ref().map_or(0, |d| d.id.len())
+            })
             .sum();
         let mut elements: Vec<ElementBlock> = Vec::with_capacity(element_count);
 
@@ -66,7 +80,10 @@ impl OsmParser {
                         granularity: block.granularity,
                         lat_offset: block.lat_offset,
                         lon_offset: block.lon_offset,
-                        kv_offsets: Self::compute_offsets(&dense_nodes.keys_vals, dense_nodes.id.len()),
+                        kv_offsets: Self::compute_offsets(
+                            &dense_nodes.keys_vals,
+                            dense_nodes.id.len(),
+                        ),
                         nodes: Arc::from(dense_nodes),
                     }));
                 }
@@ -119,7 +136,11 @@ impl OsmParser {
                     let cache = get_tags_filter().unwrap();
 
                     // Branchless linear scan for ≤8 elements
-                    if cache.contains(&key) { Some(i as u32) } else { None }
+                    if cache.contains(&key) {
+                        Some(i as u32)
+                    } else {
+                        None
+                    }
                 })
                 .collect::<Vec<u32>>(),
         )

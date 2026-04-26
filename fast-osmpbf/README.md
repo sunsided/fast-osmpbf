@@ -14,7 +14,7 @@ you might want to check out other libraries such as [osmpbf](https://crates.io/c
 - OS: Linux (Ubuntu)
 - Dataset: `germany-latest.osm.pbf` (~4.6GB)
 
-```
+```text
 Hyperfine was used to benchmark with 10 runs each.
 What you see here is the mean time of these 10 runs.
 All problems were run using parallelization if the library offered a way to do it.
@@ -30,7 +30,7 @@ All problems were run using parallelization if the library offered a way to do i
 1. Count ways.
    We can (but dont have to) apply an element filter beforehand. Saves a little bit of computation.
 
-```rust
+```rust,ignore
 use fast_osmpbf::*;
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
    We apply a filter on tags beforehand. This filter does not only filtering on tags, it actually speeds up computing by using a cache.
    If you iterate over tags and you know you only need certain tags, apply the filter beforehand.
 
-```rust
+```rust,ignore
 use fast_osmpbf::*;
 use fast_osmpbf::prelude::*;
 

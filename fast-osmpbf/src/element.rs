@@ -76,7 +76,10 @@ impl DenseNodeBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
+        self.table
+            .iter()
+            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
+            .collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -109,7 +112,11 @@ impl DenseNodeBlock {
             longitudes.push((last_lon * self.granularity + self.lon_offset) as f64 * 1e-9);
 
             let start = self.kv_offsets[node_idx];
-            let end = self.kv_offsets.get(node_idx + 1).copied().unwrap_or(self.nodes.keys_vals.len());
+            let end = self
+                .kv_offsets
+                .get(node_idx + 1)
+                .copied()
+                .unwrap_or(self.nodes.keys_vals.len());
 
             let mut i = start;
             while i + 1 < end {
@@ -168,7 +175,13 @@ impl<'a> DenseNodeRef<'a> {
         let slice = &self.block.nodes.keys_vals[start..end];
         let table = &self.block.table;
 
-        DenseNodeTagIter { slice, table, pos: 0, cached_tag_ids: self.cached_tag_ids, use_cache: get_tags_filter().is_some() }
+        DenseNodeTagIter {
+            slice,
+            table,
+            pos: 0,
+            cached_tag_ids: self.cached_tag_ids,
+            use_cache: get_tags_filter().is_some(),
+        }
     }
 }
 struct DenseNodeIter<'a> {
@@ -231,7 +244,13 @@ impl NodeBlock {
         let mut prev_lon = 0i64;
 
         self.nodes.iter().map(move |node| {
-            let node_ref = NodeRef { node, cached_tag_ids: &self.cached_tag_ids, table: &self.table, prev_lat, prev_lon };
+            let node_ref = NodeRef {
+                node,
+                cached_tag_ids: &self.cached_tag_ids,
+                table: &self.table,
+                prev_lat,
+                prev_lon,
+            };
 
             prev_lat += node.lat;
             prev_lon += node.lon;
@@ -246,7 +265,10 @@ impl NodeBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
+        self.table
+            .iter()
+            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
+            .collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -345,7 +367,11 @@ pub struct WayBlock {
 impl WayBlock {
     /// Creates an iterator over [`WayRef`]
     pub fn iter(&self) -> impl Iterator<Item = WayRef<'_>> {
-        self.ways.iter().map(move |way| WayRef { way, cached_tag_ids: &self.cached_tag_ids, table: &self.table })
+        self.ways.iter().map(move |way| WayRef {
+            way,
+            cached_tag_ids: &self.cached_tag_ids,
+            table: &self.table,
+        })
     }
     /// Get the number of [`WayRef`]
     pub fn len(&self) -> usize {
@@ -354,7 +380,10 @@ impl WayBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
+        self.table
+            .iter()
+            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
+            .collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -461,7 +490,10 @@ impl RelationBlock {
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
     pub fn get_string_table(&self) -> Vec<String> {
-        self.table.iter().map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned()).collect()
+        self.table
+            .iter()
+            .map(|cow| unsafe { std::str::from_utf8_unchecked(cow.as_ref()) }.to_owned())
+            .collect()
     }
     /// Helper method for node bindings.
     #[cfg(feature = "node_bindings")]
@@ -516,7 +548,16 @@ impl RelationBlock {
             member_offsets.push(member_ids.len() as u32);
         }
 
-        (ids, key_ids, val_ids, kv_offsets, member_ids, member_types, member_roles, member_offsets)
+        (
+            ids,
+            key_ids,
+            val_ids,
+            kv_offsets,
+            member_ids,
+            member_types,
+            member_roles,
+            member_offsets,
+        )
     }
 }
 
@@ -611,7 +652,11 @@ impl<'a> Iterator for RelationMemberIter<'a> {
         // just a mistake when proto format was defined
         let role = unsafe { std::str::from_utf8_unchecked(&self.table[role_sid as usize]) };
 
-        Some(RelationMember { memid: self.prev_memid, role, member_type })
+        Some(RelationMember {
+            memid: self.prev_memid,
+            role,
+            member_type,
+        })
     }
 }
 
@@ -638,9 +683,10 @@ impl<'a> Iterator for DenseNodeTagIter<'a> {
             if self.use_cache && !self.cached_tag_ids.contains(&(k as u32)) {
                 continue;
             }
-            return Some((unsafe { std::str::from_utf8_unchecked(&self.table[k]) }, unsafe {
-                std::str::from_utf8_unchecked(&self.table[v])
-            }));
+            return Some((
+                unsafe { std::str::from_utf8_unchecked(&self.table[k]) },
+                unsafe { std::str::from_utf8_unchecked(&self.table[v]) },
+            ));
         }
         None
     }
@@ -684,9 +730,10 @@ impl<'a> Iterator for TagIter<'a> {
             if self.use_cache && !self.cached_tag_ids.contains(&(k as u32)) {
                 continue;
             }
-            return Some((unsafe { std::str::from_utf8_unchecked(&self.table[k]) }, unsafe {
-                std::str::from_utf8_unchecked(&self.table[v])
-            }));
+            return Some((
+                unsafe { std::str::from_utf8_unchecked(&self.table[k]) },
+                unsafe { std::str::from_utf8_unchecked(&self.table[v]) },
+            ));
         }
         None
     }

@@ -108,6 +108,43 @@ pub fn main() {
 }
 ```
 
+## Benchmarks & Profiling
+
+This crate includes a Criterion benchmark suite and convenient flamegraph
+profiling aliases.
+
+### Running benchmarks
+
+```bash
+# Run the full benchmark suite
+cargo bench-parse
+
+# Use a larger fixture
+OSM_PBF_BENCH=/path/to/larger.osm.pbf cargo bench-parse
+```
+
+Benchmarks resolve the input file relative to `CARGO_MANIFEST_DIR` or the
+`OSM_PBF_BENCH` environment variable. If the fixture is missing, benches print
+a warning and skip rather than panicking.
+
+### Flamegraph profiling
+
+Requires [`cargo-flamegraph`](https://github.com/flamegraph-rs/flamegraph)
+(`cargo install flamegraph`) and `perf` (Linux) or `dtrace` (macOS).
+
+```bash
+# Profile the count_ways example
+cargo flame-ways
+
+# Profile the count_addresses example
+cargo flame-addresses
+
+# Profile the benchmark suite
+cargo flame-bench
+```
+
+Each command produces `flamegraph.svg` in the current directory.
+
 ## License
 
 This project is licensed under

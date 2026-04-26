@@ -1,0 +1,12 @@
+[alias]
+# Run the full criterion suite
+bench-parse      = "bench --bench parse"
+# Quick single-bench run (pattern passed through)
+bench-quick      = "bench --bench parse --"
+
+# Flamegraph a specific example against the committed fixture.
+# Requires: cargo install flamegraph + perf (linux) / dtrace (macos).
+flame-ways       = "flamegraph --profile profiling --example count_ways -- tests/clipperton.osm.pbf"
+flame-addresses  = "flamegraph --profile profiling --example count_addresses -- tests/clipperton.osm.pbf"
+# Flamegraph a benchmark binary (bench mode via --bench)
+flame-bench      = "flamegraph --profile profiling --bench parse -- --bench"

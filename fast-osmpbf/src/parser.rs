@@ -1,6 +1,6 @@
 use crate::{
     Blob, DenseNodeBlock, ElementBlock, NodeBlock, PrimitiveBlock, RelationBlock, WayBlock,
-    get_element_filter, get_tags_filter,
+    get_element_filter, get_tags_filter, reader::BlobBytes,
 };
 use quick_protobuf::{BytesReader, MessageRead};
 use std::{borrow::Cow, io::Read, sync::Arc};
@@ -10,20 +10,21 @@ impl OsmParser {
     /// Deserialize blob_slices into a Blob.
     /// Then decompresses the blob if its stored in a compressed state.
     /// Then parses ElementBlocks inside the decompressed blob.
-    pub(crate) fn deserialize_blob(blob_slice: Arc<[u8]>) -> std::io::Result<Vec<ElementBlock>> {
+    pub(crate) fn deserialize_blob(blob: BlobBytes) -> std::io::Result<Vec<ElementBlock>> {
         // Deserialize blob
-        let mut reader = BytesReader::from_bytes(&blob_slice);
-        let blob = Blob::from_reader(&mut reader, &blob_slice)
+        let blob_bytes = blob.as_bytes();
+        let mut reader = BytesReader::from_bytes(blob_bytes);
+        let blob = Blob::from_reader(&mut reader, blob_bytes)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         // either take the raw_size if available or use 2 * compressed_size as heuristic
         let size = match blob.raw_size {
             Some(raw_size) => raw_size as usize,
-            None => blob_slice.len() * 2,
+            None => blob_bytes.len() * 2,
         };
         let mut decompressed_blob: Vec<u8> = Vec::with_capacity(size);
         if let Some(raw) = &blob.raw {
-            decompressed_blob.extend_from_slice(raw);
+            return Self::parse_blob(raw);
         } else if let Some(zlib) = &blob.zlib_data {
             let mut decoder = flate2::read::ZlibDecoder::new(&zlib[..]);
             decoder.read_to_end(&mut decompressed_blob)?;

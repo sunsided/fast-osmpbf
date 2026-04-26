@@ -7,10 +7,13 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{BufReader, ErrorKind, Read},
+    io::{BufReader, Read},
     path::Path,
     sync::Arc,
 };
+
+#[cfg(feature = "mmap")]
+use std::io::ErrorKind;
 
 #[cfg(feature = "io-hints")]
 use crate::io_hints::open_sequential_read_only;
@@ -31,17 +34,43 @@ fn open_file<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
 }
 
 const BUF_SIZE: usize = 1024 * 1024; // 1MB
-const MAX_BLOB_SIZE: usize = 32 * 1024 * 1024; // 32MB
 const MAX_HEADER_SIZE: usize = 64 * 1024; // 64KB
 const MAX_Q_ELEMENTS: usize = 1_000;
 const MAX_TAGS: usize = 8;
+
+#[derive(Debug)]
+pub(crate) enum BlobBytes {
+    Owned(Arc<[u8]>),
+    #[cfg(feature = "mmap")]
+    Mapped {
+        owner: Arc<memmap2::Mmap>,
+        range: std::ops::Range<usize>,
+    },
+}
+
+impl BlobBytes {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        match self {
+            BlobBytes::Owned(arc) => arc,
+            #[cfg(feature = "mmap")]
+            BlobBytes::Mapped { owner, range } => &owner[range.clone()],
+        }
+    }
+}
+
+impl std::ops::Deref for BlobBytes {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
 
 #[derive(Debug)]
 enum Source {
     Buffered(BufReader<File>),
     #[cfg(feature = "mmap")]
     Mmap {
-        map: memmap2::Mmap,
+        map: Arc<memmap2::Mmap>,
         pos: usize,
     },
 }
@@ -83,25 +112,25 @@ impl Source {
         }
     }
 
-    #[allow(dead_code)]
-    fn peek_slice(&mut self, n: usize) -> std::io::Result<&[u8]> {
+    fn take_blob(&mut self, blob_size: usize) -> std::io::Result<BlobBytes> {
         match self {
-            Source::Buffered(_) => {
-                let _ = n;
-                Err(std::io::Error::new(
-                    ErrorKind::Unsupported,
-                    "peek_slice not supported for buffered source",
-                ))
+            Source::Buffered(reader) => {
+                let mut buf = vec![0u8; blob_size];
+                reader.read_exact(&mut buf)?;
+                Ok(BlobBytes::Owned(Arc::from(buf.as_slice())))
             }
             #[cfg(feature = "mmap")]
             Source::Mmap { map, pos } => {
-                if *pos + n > map.len() {
+                if *pos + blob_size > map.len() {
                     return Err(std::io::Error::new(
                         ErrorKind::UnexpectedEof,
                         "unexpected EOF",
                     ));
                 }
-                Ok(&map[*pos..*pos + n])
+                let owner = Arc::clone(map);
+                let range = *pos..*pos + blob_size;
+                *pos += blob_size;
+                Ok(BlobBytes::Mapped { owner, range })
             }
         }
     }
@@ -112,7 +141,6 @@ impl Source {
 pub struct OsmReader {
     source: Source,
     header: Vec<u8>,
-    blob: Vec<u8>,
 }
 
 impl OsmReader {
@@ -132,7 +160,6 @@ impl OsmReader {
         Ok(Self {
             source: Source::Buffered(reader),
             header: Vec::with_capacity(MAX_HEADER_SIZE),
-            blob: Vec::with_capacity(MAX_BLOB_SIZE),
         })
     }
 
@@ -171,9 +198,11 @@ impl OsmReader {
         let _ = map.advise(memmap2::Advice::Sequential);
 
         Ok(Self {
-            source: Source::Mmap { map, pos: 0 },
+            source: Source::Mmap {
+                map: Arc::new(map),
+                pos: 0,
+            },
             header: Vec::with_capacity(MAX_HEADER_SIZE),
-            blob: Vec::with_capacity(MAX_BLOB_SIZE),
         })
     }
 
@@ -219,7 +248,7 @@ impl OsmReader {
     /// Creates an iterator that yields [`ElementBlock`]
     pub fn blocks(self) -> ElementBlockIter {
         let num_threads = rayon::current_num_threads();
-        let (blob_tx, blob_rx) = crossbeam_channel::bounded::<Arc<[u8]>>(num_threads);
+        let (blob_tx, blob_rx) = crossbeam_channel::bounded::<BlobBytes>(num_threads);
         let (element_block_tx, element_block_rx) =
             crossbeam_channel::bounded::<ElementBlock>(MAX_Q_ELEMENTS);
 
@@ -259,7 +288,7 @@ impl OsmReader {
     }
 
     // Sequential operation - raw blobs have different sizes, need to look at length prefix and blob header first to know exact size
-    fn next_blob(&mut self) -> std::io::Result<Option<Arc<[u8]>>> {
+    fn next_blob(&mut self) -> std::io::Result<Option<BlobBytes>> {
         let mut prefix = [0u8; 4];
 
         // Read length prefix (always 4 bytes)
@@ -292,18 +321,8 @@ impl OsmReader {
             return self.next_blob();
         }
 
-        if self.blob.len() < blob_size {
-            // grow buffer slightly larger to reduce repeated reallocs
-            let new_capacity = blob_size * 2;
-            self.blob.resize(new_capacity, 0);
-        }
+        let blob_bytes = self.source.take_blob(blob_size)?;
 
-        if self.blob.len() < blob_size {
-            self.blob.resize(blob_size, 0);
-        }
-        self.source.read_exact(&mut self.blob[..blob_size])?;
-        let blob_slice: Arc<[u8]> = Arc::from(&self.blob[..blob_size]);
-
-        Ok(Some(blob_slice))
+        Ok(Some(blob_bytes))
     }
 }

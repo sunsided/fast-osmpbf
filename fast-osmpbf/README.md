@@ -152,6 +152,7 @@ This crate supports the following optional Cargo features:
 | Feature | Description |
 | ------- | ----------- |
 | `mmap` | Enable memory-mapped file I/O via `from_path_mmap` for potentially faster reads on large files. |
+| `io-hints` | Enable platform-specific I/O hints (e.g. `fadvise` on Linux, `FILE_FLAG_SEQUENTIAL_SCAN` on Windows) to optimize sequential file reads. |
 
 ### Using the `mmap` feature
 
@@ -176,6 +177,43 @@ fn main() {
         // process blocks...
     });
 }
+```
+
+### Using the `io-hints` feature
+
+When the `io-hints` feature is enabled, both `from_path` and `from_path_mmap` automatically apply OS-level sequential read hints. These hints improve throughput on large files by telling the kernel to prefetch pages and avoid caching read-once data:
+
+```toml
+[dependencies]
+fast-osmpbf = { version = "0.2", features = ["io-hints"] }
+```
+
+```rust,ignore
+use fast_osmpbf::*;
+
+fn main() {
+    let arg = std::env::args_os()
+        .nth(1)
+        .expect("need a *.osm.pbf file as argument");
+    let path = std::path::Path::new(&arg);
+
+    // Buffered I/O with sequential read hints
+    let reader = OsmReader::from_path(path).expect("Invalid file path");
+
+    // Or combine with mmap for maximum throughput
+    // let reader = OsmReader::from_path_mmap(path).expect("Invalid file path");
+
+    reader.blocks().for_each(|block| {
+        // process blocks...
+    });
+}
+```
+
+For best results, combine both features:
+
+```toml
+[dependencies]
+fast-osmpbf = { version = "0.2", features = ["mmap", "io-hints"] }
 ```
 
 ## License

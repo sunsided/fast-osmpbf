@@ -33,7 +33,7 @@ fn open_file<P: AsRef<Path>>(path: P) -> std::io::Result<File> {
     open_sequential_read_only(path)
 }
 
-const BUF_SIZE: usize = 1024 * 1024; // 1MB
+const BUF_SIZE: usize = 4 * 1024 * 1024; // 4MB
 const MAX_HEADER_SIZE: usize = 64 * 1024; // 64KB
 const MAX_Q_ELEMENTS: usize = 1_000;
 const MAX_TAGS: usize = 8;
@@ -225,34 +225,18 @@ impl OsmReader {
             return Err("Not allowed to provide more than 8 tags");
         }
 
-        let mut leaked: Vec<&'static str> = tags
-            .iter()
-            .map(|t| {
-                let boxed: Box<str> = t.to_string().into_boxed_str();
-                let s: &'static mut str = Box::leak(boxed);
-                &*s // coerce &'static mut str → &'static str
-            })
-            .collect();
+        let mut owned: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
+        owned.sort_unstable();
 
-        leaked.sort_unstable();
-
-        *TAG_KEYS_FILTER.write().unwrap() = Some(leaked.into_boxed_slice());
+        *TAG_KEYS_FILTER.write().unwrap() = Some(owned.into_boxed_slice());
         Ok(())
     }
 
     /// Creates a parallel iterator that yields [`ElementBlock`]
     pub fn par_blocks(self) -> impl ParallelIterator<Item = ElementBlock> {
-        self.blocks().par_bridge()
-    }
+        let (blob_tx, blob_rx) = crossbeam_channel::bounded::<BlobBytes>(MAX_Q_ELEMENTS);
 
-    /// Creates an iterator that yields [`ElementBlock`]
-    pub fn blocks(self) -> ElementBlockIter {
-        let num_threads = rayon::current_num_threads();
-        let (blob_tx, blob_rx) = crossbeam_channel::bounded::<BlobBytes>(num_threads);
-        let (element_block_tx, element_block_rx) =
-            crossbeam_channel::bounded::<ElementBlock>(MAX_Q_ELEMENTS);
-
-        // Spawn a thread to continuously read blobs
+        // IO thread: reads raw blobs from file/mmap
         std::thread::spawn(move || {
             let mut reader = self;
             while let Ok(Some(blob)) = reader.next_blob() {
@@ -260,25 +244,45 @@ impl OsmReader {
                     break;
                 }
             }
+            drop(blob_tx);
         });
 
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .expect("Failed to create thread pool");
+        blob_rx.into_iter().par_bridge().flat_map_iter(|blob| {
+            OsmParser::deserialize_blob(blob)
+                .map(|blocks| blocks.into_iter())
+                .unwrap_or_default()
+        })
+    }
 
-        // Spawn parsing tasks inside the pool
+    /// Creates an iterator that yields [`ElementBlock`]
+    pub fn blocks(self) -> ElementBlockIter {
+        let num_threads = rayon::current_num_threads();
+        let (blob_tx, blob_rx) = crossbeam_channel::bounded::<BlobBytes>(num_threads * 4);
+        let (element_block_tx, element_block_rx) =
+            crossbeam_channel::bounded::<ElementBlock>(MAX_Q_ELEMENTS);
+
+        // IO thread: reads raw blobs from file/mmap
+        let io_blob_tx = blob_tx;
         std::thread::spawn(move || {
-            pool.install(|| {
-                blob_rx.into_iter().par_bridge().for_each(|blob| {
-                    if let Ok(element_blocks) = OsmParser::deserialize_blob(blob) {
-                        for block in element_blocks {
-                            if element_block_tx.send(block).is_err() {
-                                return;
-                            }
+            let mut reader = self;
+            while let Ok(Some(blob)) = reader.next_blob() {
+                if io_blob_tx.send(blob).is_err() {
+                    break;
+                }
+            }
+            drop(io_blob_tx);
+        });
+
+        // Orchestrator thread: parses blobs on the global pool via par_bridge
+        std::thread::spawn(move || {
+            blob_rx.into_iter().par_bridge().for_each(|blob| {
+                if let Ok(element_blocks) = OsmParser::deserialize_blob(blob) {
+                    for block in element_blocks {
+                        if element_block_tx.send(block).is_err() {
+                            return;
                         }
                     }
-                });
+                }
             });
         });
 

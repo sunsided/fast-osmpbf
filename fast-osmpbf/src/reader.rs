@@ -115,9 +115,11 @@ impl Source {
     fn take_blob(&mut self, blob_size: usize) -> std::io::Result<BlobBytes> {
         match self {
             Source::Buffered(reader) => {
-                let mut buf = vec![0u8; blob_size];
-                reader.read_exact(&mut buf)?;
-                Ok(BlobBytes::Owned(Arc::from(buf.as_slice())))
+                // `Arc::from(Vec)` would still copy, so read directly into the Arc's allocation.
+                let mut buf: Arc<[u8]> = std::iter::repeat_n(0u8, blob_size).collect();
+                let slice = Arc::get_mut(&mut buf).expect("newly created Arc is unique");
+                reader.read_exact(slice)?;
+                Ok(BlobBytes::Owned(buf))
             }
             #[cfg(feature = "mmap")]
             Source::Mmap { map, pos } => {

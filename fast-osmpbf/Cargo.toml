@@ -40,5 +40,5 @@ strip = false
 
 [features]
 node_bindings = []
-mmap = ["dep:memmap2"]
+mmap = ["dep:memmap2", "io-hints"]
 io-hints = ["dep:rustix"]

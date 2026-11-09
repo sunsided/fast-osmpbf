@@ -26,6 +26,23 @@ fn require_fixture() -> PathBuf {
     path
 }
 
+#[cfg(all(feature = "mmap", unix))]
+#[test]
+fn mmap_reader_holds_shared_lock_until_dropped() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let path = require_fixture();
+    let reader = OsmReader::from_path_mmap(&path).expect("Failed to open fixture");
+    let probe = std::fs::File::open(&path).unwrap();
+
+    assert!(matches!(
+        probe.try_lock(),
+        Err(std::fs::TryLockError::WouldBlock)
+    ));
+
+    drop(reader);
+    probe.try_lock().expect("lock released with the reader");
+}
+
 #[test]
 fn reader_from_path() {
     let _guard = TEST_LOCK.lock().unwrap();

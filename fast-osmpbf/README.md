@@ -155,7 +155,7 @@ This crate supports the following optional Cargo features:
 
 | Feature | Description |
 | ------- | ----------- |
-| `mmap` | Enable memory-mapped file I/O via `from_path_mmap` for potentially faster reads on large files. |
+| `mmap` | Enable memory-mapped file I/O via `from_path_mmap` for potentially faster reads on large files. Implies `io-hints`. |
 | `io-hints` | Enable platform-specific I/O hints (e.g. `fadvise` on Linux, `FILE_FLAG_SEQUENTIAL_SCAN` on Windows) to optimize sequential file reads. |
 
 ### Using the `mmap` feature
@@ -204,20 +204,13 @@ fn main() {
     // Buffered I/O with sequential read hints
     let reader = OsmReader::from_path(path).expect("Invalid file path");
 
-    // Or combine with mmap for maximum throughput
+    // Or use mmap, which enables `io-hints` automatically
     // let reader = OsmReader::from_path_mmap(path).expect("Invalid file path");
 
     reader.blocks().for_each(|block| {
         // process blocks...
     });
 }
-```
-
-For best results, combine both features:
-
-```toml
-[dependencies]
-fast-osmpbf = { version = "0.2", features = ["mmap", "io-hints"] }
 ```
 
 ## License

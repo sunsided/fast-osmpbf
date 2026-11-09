@@ -72,6 +72,8 @@ enum Source {
     Mmap {
         map: Arc<memmap2::Mmap>,
         pos: usize,
+        // Closing the file would release the advisory lock taken when opening it.
+        _file: File,
     },
 }
 
@@ -80,7 +82,7 @@ impl Source {
         match self {
             Source::Buffered(reader) => reader.read_exact(buf),
             #[cfg(feature = "mmap")]
-            Source::Mmap { map, pos } => {
+            Source::Mmap { map, pos, .. } => {
                 let n = buf.len();
                 if *pos + n > map.len() {
                     return Err(std::io::Error::new(
@@ -99,7 +101,7 @@ impl Source {
         match self {
             Source::Buffered(reader) => reader.seek_relative(n as i64).map(|_| ()),
             #[cfg(feature = "mmap")]
-            Source::Mmap { map, pos } => {
+            Source::Mmap { map, pos, .. } => {
                 if *pos + n > map.len() {
                     return Err(std::io::Error::new(
                         ErrorKind::UnexpectedEof,
@@ -122,7 +124,7 @@ impl Source {
                 Ok(BlobBytes::Owned(buf))
             }
             #[cfg(feature = "mmap")]
-            Source::Mmap { map, pos } => {
+            Source::Mmap { map, pos, .. } => {
                 if *pos + blob_size > map.len() {
                     return Err(std::io::Error::new(
                         ErrorKind::UnexpectedEof,
@@ -176,7 +178,8 @@ impl OsmReader {
     /// To mitigate this, the file is opened read-only with an advisory shared
     /// lock (`LOCK_SH` on Unix, write-sharing denied on Windows), which
     /// prevents other processes that cooperate with advisory locking from
-    /// modifying the file while the reader is active.
+    /// modifying the file while the reader is active. Locking is best-effort:
+    /// the file still opens if the lock fails or the platform has no support.
     ///
     /// # Trade-offs
     /// - **Linux/macOS**: Typically faster for large files; the OS page cache
@@ -196,13 +199,14 @@ impl OsmReader {
         let file = open_file(path_ref)?;
         let map = unsafe { memmap2::Mmap::map(&file)? };
 
-        #[cfg(all(feature = "mmap", feature = "io-hints"))]
+        #[cfg(unix)]
         let _ = map.advise(memmap2::Advice::Sequential);
 
         Ok(Self {
             source: Source::Mmap {
                 map: Arc::new(map),
                 pos: 0,
+                _file: file,
             },
             header: Vec::with_capacity(MAX_HEADER_SIZE),
         })

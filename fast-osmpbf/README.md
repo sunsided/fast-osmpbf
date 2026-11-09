@@ -127,6 +127,10 @@ Benchmarks resolve the input file relative to `CARGO_MANIFEST_DIR` or the
 `OSM_PBF_BENCH` environment variable. If the fixture is missing, benches print
 a warning and skip rather than panicking.
 
+Benchmarks and integration tests also read `OSM_PBF_BENCH` and `OSM_PBF_TEST`
+from a git-ignored `.env` file. Variables already set in the environment take
+precedence.
+
 ### Flamegraph profiling
 
 Requires [`cargo-flamegraph`](https://github.com/flamegraph-rs/flamegraph)

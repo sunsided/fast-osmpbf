@@ -1,13 +1,12 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use fast_osmpbf::prelude::*;
 use fast_osmpbf::*;
-use std::env;
 use std::path::PathBuf;
 
 fn bench_path() -> PathBuf {
-    env::var_os("OSM_PBF_BENCH")
+    dotenvy::var("OSM_PBF_BENCH")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
+        .unwrap_or_else(|_| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/clipperton.osm.pbf")
         })
 }

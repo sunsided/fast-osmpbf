@@ -1,6 +1,5 @@
 use fast_osmpbf::prelude::*;
 use fast_osmpbf::*;
-use std::env;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -12,9 +11,9 @@ const FIXTURE_RELATIONS: usize = 17;
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn fixture_path() -> PathBuf {
-    env::var_os("OSM_PBF_TEST")
+    dotenvy::var("OSM_PBF_TEST")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
+        .unwrap_or_else(|_| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/clipperton.osm.pbf")
         })
 }

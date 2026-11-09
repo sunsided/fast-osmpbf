@@ -18,12 +18,15 @@ impl OsmParser {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         if let Some(raw) = &blob.raw {
-            let data = match &blob_bytes {
-                BlobBytes::Owned(arc) => Arc::clone(arc),
+            match &blob_bytes {
+                BlobBytes::Owned(arc) => Self::parse_blob(Arc::clone(arc), raw.as_ref()),
                 #[cfg(feature = "mmap")]
-                BlobBytes::Mapped { owner, range } => Arc::from(&owner[range.clone()]),
-            };
-            Self::parse_blob(data, raw.as_ref())
+                BlobBytes::Mapped { .. } => {
+                    // String offsets are relative to `data`, so it must back the parsed slice.
+                    let data: Arc<[u8]> = Arc::from(raw.as_ref());
+                    Self::parse_blob(Arc::clone(&data), &data)
+                }
+            }
         } else if let Some(zlib) = &blob.zlib_data {
             let size = match blob.raw_size {
                 Some(raw_size) => raw_size as usize,
@@ -194,5 +197,43 @@ impl OsmParser {
         }
 
         offsets
+    }
+}
+
+#[cfg(all(test, feature = "mmap"))]
+mod tests {
+    use super::*;
+
+    fn field(tag: u8, payload: &[u8]) -> Vec<u8> {
+        let mut out = vec![tag, u8::try_from(payload.len()).unwrap()];
+        out.extend_from_slice(payload);
+        out
+    }
+
+    #[test]
+    fn raw_blob_from_mmap_resolves_stringtable() {
+        let stringtable = field(0x0A, b"highway");
+        let way = [0x08, 0x01]; // id = 1
+        let group = field(0x1A, &way);
+        let block = [field(0x0A, &stringtable), field(0x12, &group)].concat();
+        let blob = field(0x0A, &block);
+
+        let mut map = memmap2::MmapOptions::new()
+            .len(blob.len())
+            .map_anon()
+            .unwrap();
+        map.copy_from_slice(&blob);
+        let owner = Arc::new(map.make_read_only().unwrap());
+
+        let blocks = OsmParser::deserialize_blob(BlobBytes::Mapped {
+            owner,
+            range: 0..blob.len(),
+        })
+        .unwrap();
+
+        let [ElementBlock::WayBlock(ways)] = blocks.as_slice() else {
+            panic!("expected a single way block");
+        };
+        assert_eq!(ways.table.get(0), b"highway");
     }
 }
